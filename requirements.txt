@@ -1,0 +1,5 @@
+# Multi-Crypto Bot Dependencies
+python-binance>=1.0.17
+python-dotenv>=1.0.0
+requests>=2.28.0
+colorama>=0.4.6
