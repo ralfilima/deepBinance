@@ -1,194 +1,165 @@
 """
-Indicadores Técnicos para o Bot Scalper
+indicators.py - Funções para cálculo de indicadores técnicos.
+EMA, RSI, Bandas de Bollinger, ATR.
 """
-import pandas as pd
+
 import numpy as np
-from typing import List
+import pandas as pd
+from typing import Tuple
 
 
-def calculate_ema(prices: List[float], period: int) -> float:
-    """
-    Calcula EMA (Exponential Moving Average).
+def klines_to_dataframe(klines: list) -> pd.DataFrame:
+    """Converte klines da Binance para DataFrame."""
+    df = pd.DataFrame(klines, columns=[
+        "timestamp", "open", "high", "low", "close", "volume",
+        "close_time", "quote_volume", "trades", "taker_buy_base",
+        "taker_buy_quote", "ignore"
+    ])
     
-    Args:
-        prices: Lista de preços de fechamento
-        period: Período da EMA
+    for col in ["open", "high", "low", "close", "volume", "quote_volume"]:
+        df[col] = df[col].astype(float)
     
-    Returns:
-        Valor da EMA
-    """
-    if len(prices) < period:
-        return prices[-1] if prices else 0.0
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df.set_index("timestamp", inplace=True)
     
-    return pd.Series(prices).ewm(span=period, adjust=False).mean().iloc[-1]
+    return df
 
 
-def calculate_sma(prices: List[float], period: int) -> float:
-    """
-    Calcula SMA (Simple Moving Average).
-    
-    Args:
-        prices: Lista de preços de fechamento
-        period: Período da SMA
-    
-    Returns:
-        Valor da SMA
-    """
-    if len(prices) < period:
-        return sum(prices) / len(prices) if prices else 0.0
-    
-    return sum(prices[-period:]) / period
+def calculate_ema(series: pd.Series, period: int) -> pd.Series:
+    """Calcula Média Móvel Exponencial."""
+    return series.ewm(span=period, adjust=False).mean()
 
 
-def calculate_rsi(prices: List[float], period: int = 14) -> float:
-    """
-    Calcula RSI (Relative Strength Index).
+def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    """Calcula Índice de Força Relativa (RSI)."""
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
     
-    Args:
-        prices: Lista de preços de fechamento
-        period: Período do RSI (default: 14)
+    avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
+    avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
     
-    Returns:
-        Valor do RSI (0-100)
-    """
-    if len(prices) < period + 1:
-        return 50.0  # Valor neutro se não há dados suficientes
-    
-    deltas = np.diff(prices)
-    seed = deltas[:period + 1]
-    
-    up = seed[seed >= 0].sum() / period
-    down = -seed[seed < 0].sum() / period
-    
-    if down == 0:
-        return 100.0 if up > 0 else 50.0
-    
-    rs = up / down
+    rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    
-    for delta in deltas[period + 1:]:
-        if delta > 0:
-            upval = delta
-            downval = 0
-        else:
-            upval = 0
-            downval = -delta
-        
-        up = (up * (period - 1) + upval) / period
-        down = (down * (period - 1) + downval) / period
-        
-        if down == 0:
-            rsi = 100.0 if up > 0 else 50.0
-        else:
-            rs = up / down
-            rsi = 100 - (100 / (1 + rs))
     
     return rsi
 
 
-def calculate_atr(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> float:
+def calculate_bollinger_bands(series: pd.Series, period: int = 20,
+                               std_dev: float = 2.0) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """
-    Calcula ATR (Average True Range).
-    
-    Args:
-        highs: Lista de preços altos
-        lows: Lista de preços baixos
-        closes: Lista de preços de fechamento
-        period: Período do ATR (default: 14)
-    
-    Returns:
-        Valor do ATR
+    Calcula Bandas de Bollinger.
+    Retorna: (banda_superior, banda_média, banda_inferior)
     """
-    if len(closes) < 2:
-        return 0.0
+    sma = series.rolling(window=period).mean()
+    std = series.rolling(window=period).std()
     
-    true_ranges = []
+    upper = sma + (std * std_dev)
+    lower = sma - (std * std_dev)
     
-    for i in range(1, len(closes)):
-        high_low = highs[i] - lows[i]
-        high_close = abs(highs[i] - closes[i - 1])
-        low_close = abs(lows[i] - closes[i - 1])
-        
-        true_range = max(high_low, high_close, low_close)
-        true_ranges.append(true_range)
+    return upper, sma, lower
+
+
+def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Calcula Average True Range (ATR)."""
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
     
-    if len(true_ranges) < period:
-        return sum(true_ranges) / len(true_ranges) if true_ranges else 0.0
+    tr1 = high - low
+    tr2 = abs(high - close.shift(1))
+    tr3 = abs(low - close.shift(1))
     
-    # ATR com suavização exponencial
-    atr = sum(true_ranges[:period]) / period
-    
-    for tr in true_ranges[period:]:
-        atr = ((period - 1) * atr + tr) / period
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.ewm(span=period, adjust=False).mean()
     
     return atr
 
 
-def calculate_bollinger_bands(
-    prices: List[float], 
-    period: int = 20, 
-    std_dev: float = 2.0
-) -> tuple:
+def calculate_all_indicators(df: pd.DataFrame, ema_fast: int = 9, ema_slow: int = 21,
+                              rsi_period: int = 14, bb_period: int = 20,
+                              bb_std: float = 2.0, atr_period: int = 14) -> pd.DataFrame:
     """
-    Calcula Bollinger Bands.
-    
-    Args:
-        prices: Lista de preços de fechamento
-        period: Período da média móvel (default: 20)
-        std_dev: Número de desvios padrão (default: 2.0)
-    
-    Returns:
-        Tuple (upper_band, middle_band, lower_band)
+    Calcula todos os indicadores para um DataFrame de candles.
+    Adiciona colunas ao DataFrame original.
     """
-    if len(prices) < period:
-        middle = prices[-1] if prices else 0.0
-        return middle, middle, middle
+    close = df["close"]
     
-    middle = calculate_sma(prices, period)
+    # EMAs
+    df["ema_fast"] = calculate_ema(close, ema_fast)
+    df["ema_slow"] = calculate_ema(close, ema_slow)
     
-    # Calcula desvio padrão
-    variance = sum((p - middle) ** 2 for p in prices[-period:]) / period
-    std = variance ** 0.5
+    # RSI
+    df["rsi"] = calculate_rsi(close, rsi_period)
     
-    upper = middle + (std_dev * std)
-    lower = middle - (std_dev * std)
+    # Bandas de Bollinger
+    df["bb_upper"], df["bb_middle"], df["bb_lower"] = calculate_bollinger_bands(
+        close, bb_period, bb_std
+    )
     
-    return upper, middle, lower
+    # ATR
+    df["atr"] = calculate_atr(df, atr_period)
+    
+    return df
 
 
-def calculate_macd(
-    prices: List[float], 
-    fast_period: int = 12, 
-    slow_period: int = 26, 
-    signal_period: int = 9
-) -> tuple:
+def get_signal(df: pd.DataFrame, rsi_long_min: float = 50, rsi_long_max: float = 70,
+               rsi_short_min: float = 30, rsi_short_max: float = 50) -> str:
     """
-    Calcula MACD (Moving Average Convergence Divergence).
-    
-    Args:
-        prices: Lista de preços de fechamento
-        fast_period: Período da EMA rápida (default: 12)
-        slow_period: Período da EMA lenta (default: 26)
-        signal_period: Período da linha de sinal (default: 9)
-    
-    Returns:
-        Tuple (macd_line, signal_line, histogram)
+    Analisa o último candle e retorna sinal de trading.
+    Retorna: 'LONG', 'SHORT' ou 'NONE'
     """
-    if len(prices) < slow_period:
-        return 0.0, 0.0, 0.0
+    if len(df) < 2:
+        return "NONE"
     
-    # Calcula EMAs
-    series = pd.Series(prices)
-    ema_fast = series.ewm(span=fast_period, adjust=False).mean()
-    ema_slow = series.ewm(span=slow_period, adjust=False).mean()
+    last = df.iloc[-1]
     
-    # MACD line
-    macd_line = ema_fast - ema_slow
+    price = last["close"]
+    ema_fast = last["ema_fast"]
+    ema_slow = last["ema_slow"]
+    rsi = last["rsi"]
+    bb_upper = last["bb_upper"]
+    bb_lower = last["bb_lower"]
     
-    # Signal line
-    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+    # Verificar NaN
+    if any(pd.isna([price, ema_fast, ema_slow, rsi, bb_upper, bb_lower])):
+        return "NONE"
     
-    # Histogram
-    histogram = macd_line - signal_line
+    # LONG: Preço > EMA9 > EMA21, RSI entre 50-70, preço abaixo da banda superior
+    if (price > ema_fast > ema_slow and
+            rsi_long_min <= rsi <= rsi_long_max and
+            price < bb_upper):
+        return "LONG"
     
-    return macd_line.iloc[-1], signal_line.iloc[-1], histogram.iloc[-1]
+    # SHORT: Preço < EMA9 < EMA21, RSI entre 30-50, preço acima da banda inferior
+    if (price < ema_fast < ema_slow and
+            rsi_short_min <= rsi <= rsi_short_max and
+            price > bb_lower):
+        return "SHORT"
+    
+    return "NONE"
+
+
+def get_btc_trend(btc_df: pd.DataFrame, ema_period: int = 200) -> str:
+    """
+    Determina a tendência geral do BTC usando EMA 200.
+    Retorna: 'ALTA', 'BAIXA' ou 'LATERAL'
+    """
+    if len(btc_df) < ema_period:
+        return "LATERAL"
+    
+    ema200 = calculate_ema(btc_df["close"], ema_period)
+    last_price = btc_df["close"].iloc[-1]
+    last_ema = ema200.iloc[-1]
+    
+    if pd.isna(last_ema):
+        return "LATERAL"
+    
+    diff_percent = ((last_price - last_ema) / last_ema) * 100
+    
+    if diff_percent > 1.0:
+        return "ALTA"
+    elif diff_percent < -1.0:
+        return "BAIXA"
+    else:
+        return "LATERAL"

@@ -1,112 +1,184 @@
 """
-Configurações do Bot Scalper para Binance Futures
+config.py - Carregamento e validacao de configuracoes do bot.
+Todas as credenciais sao lidas de variaveis de ambiente (.env).
+
+v3.0 - Melhorias:
+  - Trailing stop mais conservador (1.0% ativacao, 0.5% callback)
+  - Time stop mais longo (45-120 min)
+  - Monitor a cada 10s para SL/TP por software
+  - Cooldown de 5 min apos perdas consecutivas
 """
+
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ============================================================
-# BINANCE API CONFIGURATION
-# ============================================================
-BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')
-BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY', '')
-BINANCE_TESTNET = os.getenv('BINANCE_TESTNET', 'true').lower() == 'true'
+# ============================================
+# CREDENCIAIS (nunca hardcoded)
+# ============================================
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
+BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
+BINANCE_TESTNET_API_KEY = os.getenv("BINANCE_TESTNET_API_KEY", "")
+BINANCE_TESTNET_API_SECRET = os.getenv("BINANCE_TESTNET_API_SECRET", "")
 
-# URLs da API (determinado automaticamente)
-if BINANCE_TESTNET:
-    BINANCE_BASE_URL = 'https://testnet.binancefuture.com'
-    BINANCE_WS_URL = 'wss://stream.binancefuture.com'
-else:
-    BINANCE_BASE_URL = 'https://fapi.binance.com'
-    BINANCE_WS_URL = 'wss://fstream.binance.com'
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-# Debug Mode (sem filtros de estratégia, apenas para testar ordens)
-DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+# Modo de operacao (testnet ou real)
+USE_TESTNET = os.getenv("USE_TESTNET", "true").lower() == "true"
 
-# ============================================================
-# STRATEGY PARAMETERS
-# ============================================================
-BASE_SYMBOL = 'BTCUSDT'
-SYMBOLS = [
-    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT',
-    'XRPUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'AVAXUSDT'
-]
+# ============================================
+# PARAMETROS DA ESTRATEGIA
+# ============================================
+# Timeframe dos candles
+TIMEFRAME = "5m"
+TIMEFRAME_BACKTEST = "1h"
 
-# ============================================================
-# RISK MANAGEMENT
-# ============================================================
-MAX_POSITION_SIZE_PERCENT = float(os.getenv('MAX_POSITION_SIZE_PERCENT', '1.0'))
-MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '5'))
-MAX_DAILY_LOSS_PERCENT = float(os.getenv('MAX_DAILY_LOSS_PERCENT', '3.0'))
-MAX_CONSECUTIVE_LOSSES = int(os.getenv('MAX_CONSECUTIVE_LOSSES', '3'))
+# EMAs
+EMA_FAST = 9
+EMA_SLOW = 21
+EMA_TREND = 200  # EMA do BTC para tendencia geral
 
-# ============================================================
-# ENTRY/EXIT PARAMETERS
-# ============================================================
-ENTRY_INTERVAL_SECONDS = int(os.getenv('ENTRY_INTERVAL_SECONDS', '600'))  # 10 minutos
-JITTER_MAX_SECONDS = int(os.getenv('JITTER_MAX_SECONDS', '60'))
+# RSI
+RSI_PERIOD = 14
+RSI_LONG_MIN = 50
+RSI_LONG_MAX = 70
+RSI_SHORT_MIN = 30
+RSI_SHORT_MAX = 50
 
-# Take Profit e Stop Loss (em %)
-TP_PERCENT_LONG = float(os.getenv('TP_PERCENT_LONG', '1.05'))
-SL_PERCENT_LONG = float(os.getenv('SL_PERCENT_LONG', '0.70'))
-TP_PERCENT_SHORT = float(os.getenv('TP_PERCENT_SHORT', '1.05'))
-SL_PERCENT_SHORT = float(os.getenv('SL_PERCENT_SHORT', '0.70'))
+# Bandas de Bollinger
+BB_PERIOD = 20
+BB_STD = 2
 
-# Time Stop (minutos)
-TIME_STOP_MIN = int(os.getenv('TIME_STOP_MIN', '12'))
-TIME_STOP_MAX = int(os.getenv('TIME_STOP_MAX', '22'))
+# ATR para position sizing
+ATR_PERIOD = 14
+ATR_MULTIPLIER = 2.0
 
-# ============================================================
-# CONNECTION SETTINGS
-# ============================================================
-API_TIMEOUT = int(os.getenv('API_TIMEOUT', '30'))  # segundos
-MAX_RETRIES = int(os.getenv('MAX_RETRIES', '5'))
-RETRY_DELAY_BASE = float(os.getenv('RETRY_DELAY_BASE', '2.0'))  # segundos
+# ============================================
+# SELECAO DE ATIVOS
+# ============================================
+TOP_VOLUME_COUNT = 15          # Top moedas por volume
+TOP_GAINERS_COUNT = 5          # Top valorizadoras
+PERSISTENCE_CHECKS = 3         # Verificacoes consecutivas
+PERSISTENCE_INTERVAL = 20      # Segundos entre verificacoes
+CORRELATION_THRESHOLD = 0.85   # Limite de correlacao Pearson
+MAX_PORTFOLIO_SIZE = 5         # Maximo de moedas no portfolio
 
-# ============================================================
-# LOGGING
-# ============================================================
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-LOG_FILE = os.getenv('LOG_FILE', 'bot.log')
+# ============================================
+# GESTAO DE RISCO
+# ============================================
+RISK_PER_TRADE = 0.01          # 1% do capital por trade
+MAX_OPEN_POSITIONS = 5
+MAX_DAILY_LOSS_PERCENT = 0.03  # 3% perda maxima diaria
+MAX_CONSECUTIVE_LOSSES = 3
+MAX_DRAWDOWN_PERCENT = 0.10    # 10% drawdown maximo global
+LEVERAGE = 10                  # Alavancagem padrao
 
-# ============================================================
-# VALIDATION
-# ============================================================
-def validate_config():
-    """Valida configurações críticas"""
+# Trailing Stop (v3.0 - mais conservador)
+TRAILING_ACTIVATION = 0.01     # Ativar trailing com +1.0% de lucro (era 0.5%)
+TRAILING_CALLBACK = 0.005      # Trailing de 0.5% (era 0.3%)
+
+# Time Stop (minutos) - mais longo para dar tempo ao trade
+TIME_STOP_MIN = 45             # Minimo 45 min (era 30)
+TIME_STOP_MAX = 120            # Maximo 120 min (era 90)
+
+# Auto-resume apos perdas consecutivas (segundos)
+CONSECUTIVE_LOSS_COOLDOWN = 300  # 5 minutos
+
+# ============================================
+# INTERVALOS DE EXECUCAO
+# ============================================
+ENTRY_INTERVAL_SECONDS = 60    # Intervalo entre buscas de entrada
+ENTRY_JITTER_SECONDS = 15      # Jitter aleatorio
+MONITOR_INTERVAL_SECONDS = 10  # Intervalo de monitoramento (10s para SL/TP software)
+DASHBOARD_REFRESH_SECONDS = 5  # Atualizacao do dashboard
+SELECTION_INTERVAL_SECONDS = 300  # Re-selecao de ativos (5 min)
+
+# ============================================
+# CIRCUIT BREAKER
+# ============================================
+CB_FAILURE_THRESHOLD = 10      # Falhas para abrir circuito
+CB_RECOVERY_TIMEOUT = 120      # Segundos para tentar recuperar
+CB_HALF_OPEN_MAX_CALLS = 3     # Chamadas em half-open
+
+# Retry com backoff
+RETRY_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY = 1.0         # Delay base em segundos
+RETRY_MAX_DELAY = 30.0         # Delay maximo
+
+# ============================================
+# BACKTESTING
+# ============================================
+BACKTEST_DAYS = 180            # 6 meses de dados
+BACKTEST_COMMISSION = 0.0004   # 0.04% (taker)
+BACKTEST_SLIPPAGE = 0.001      # 0.1% slippage
+BACKTEST_INITIAL_CAPITAL = 10000.0
+
+# ============================================
+# CAMINHOS
+# ============================================
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "backtest_data")
+DB_PATH = os.path.join(os.path.dirname(__file__), "trades.db")
+
+# Criar diretorios se nao existirem
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def get_api_keys(use_testnet: bool = None):
+    """Retorna as chaves de API corretas baseado no modo."""
+    if use_testnet is None:
+        use_testnet = USE_TESTNET
+    if use_testnet:
+        return BINANCE_TESTNET_API_KEY, BINANCE_TESTNET_API_SECRET
+    return BINANCE_API_KEY, BINANCE_API_SECRET
+
+
+def validate_config(use_testnet: bool = None):
+    """Valida se as configuracoes essenciais estao presentes."""
+    if use_testnet is None:
+        use_testnet = USE_TESTNET
+    
     errors = []
+    api_key, api_secret = get_api_keys(use_testnet)
+    mode = "TESTNET" if use_testnet else "REAL"
     
-    if not BINANCE_API_KEY:
-        errors.append("BINANCE_API_KEY não configurada")
-    if not BINANCE_SECRET_KEY:
-        errors.append("BINANCE_SECRET_KEY não configurada")
-    
-    if MAX_POSITION_SIZE_PERCENT <= 0 or MAX_POSITION_SIZE_PERCENT > 100:
-        errors.append("MAX_POSITION_SIZE_PERCENT deve estar entre 0 e 100")
-    
-    if TP_PERCENT_LONG <= 0:
-        errors.append("TP_PERCENT_LONG deve ser maior que 0")
-    if SL_PERCENT_LONG <= 0:
-        errors.append("SL_PERCENT_LONG deve ser maior que 0")
+    if not api_key or api_key.startswith("sua_"):
+        errors.append(f"API Key da Binance ({mode}) nao configurada no .env")
+    if not api_secret or api_secret.startswith("sua_"):
+        errors.append(f"API Secret da Binance ({mode}) nao configurado no .env")
     
     return errors
 
-def print_config():
-    """Imprime configurações atuais (sem expor secrets)"""
-    mode = "TESTNET" if BINANCE_TESTNET else "MAINNET (PRODUÇÃO)"
-    print(f"""
-╔══════════════════════════════════════════════════════════════╗
-║                    CONFIGURAÇÕES DO BOT                       ║
-╠══════════════════════════════════════════════════════════════╣
-║  Modo: {mode:<54}║
-║  URL: {BINANCE_BASE_URL:<55}║
-║  Debug: {'ATIVADO' if DEBUG_MODE else 'DESATIVADO':<54}║
-╠══════════════════════════════════════════════════════════════╣
-║  Max Posições: {MAX_OPEN_POSITIONS:<46}║
-║  Tamanho Posição: {MAX_POSITION_SIZE_PERCENT}% do capital{' '*34}║
-║  TP Long: {TP_PERCENT_LONG}% | SL Long: {SL_PERCENT_LONG}%{' '*30}║
-║  TP Short: {TP_PERCENT_SHORT}% | SL Short: {SL_PERCENT_SHORT}%{' '*29}║
-║  Time Stop: {TIME_STOP_MIN}-{TIME_STOP_MAX} minutos{' '*37}║
-╚══════════════════════════════════════════════════════════════╝
-""")
+
+def print_config_summary(use_testnet: bool = None):
+    """Exibe resumo das configuracoes atuais."""
+    if use_testnet is None:
+        use_testnet = USE_TESTNET
+    
+    mode = "TESTNET" if use_testnet else "CONTA REAL"
+    api_key, _ = get_api_keys(use_testnet)
+    key_preview = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "NAO CONFIGURADA"
+    
+    telegram_status = "Configurado" if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID else "Nao configurado"
+    
+    summary = {
+        "Modo": mode,
+        "API Key": key_preview,
+        "Telegram": telegram_status,
+        "Alavancagem": f"{LEVERAGE}x",
+        "Risco/Trade": f"{RISK_PER_TRADE*100:.1f}%",
+        "Max Posicoes": MAX_OPEN_POSITIONS,
+        "Perda Diaria Max": f"{MAX_DAILY_LOSS_PERCENT*100:.1f}%",
+        "Drawdown Max": f"{MAX_DRAWDOWN_PERCENT*100:.1f}%",
+        "Trailing Ativacao": f"+{TRAILING_ACTIVATION*100:.1f}%",
+        "Trailing Callback": f"{TRAILING_CALLBACK*100:.1f}%",
+        "Time Stop": f"{TIME_STOP_MIN}-{TIME_STOP_MAX} min",
+        "Timeframe": TIMEFRAME,
+        "Monitor Interval": f"{MONITOR_INTERVAL_SECONDS}s",
+        "CB Threshold": f"{CB_FAILURE_THRESHOLD} falhas",
+    }
+    return summary

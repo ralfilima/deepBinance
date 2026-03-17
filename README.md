@@ -1,265 +1,217 @@
-# 🤖 Randomized Trend Scalper - Binance Futures
+# Binance Futures Scalping Bot
 
-Bot de scalping automatizado para Binance Futures com gestão de risco avançada e suporte completo a Stop Loss e Take Profit.
+Bot de trading automatizado para operar contratos futuros na Binance, utilizando uma estratégia de scalping que opera múltiplas criptomoedas simultaneamente.
 
-## 📋 Índice
+---
 
-- [Características](#-características)
-- [Requisitos](#-requisitos)
-- [Instalação](#-instalação)
-- [Configuração](#-configuração)
-- [Uso](#-uso)
-- [Estratégia](#-estratégia)
-- [Gerenciamento de Risco](#-gerenciamento-de-risco)
-- [Troubleshooting](#-troubleshooting)
-- [FAQ](#-faq)
+## DISCLAIMER
 
-## ✨ Características
+> **AVISO IMPORTANTE:** Este bot é uma ferramenta de auxílio à decisão de trading. **NÃO há garantia de lucros.** Operar futuros com alavancagem envolve **ALTO RISCO** e você pode perder **TODO** o seu capital investido. O usuário final é o **ÚNICO** responsável por qualquer perda financeira. **Nunca invista mais do que pode perder.**
 
-### Funcionalidades Principais
-- ✅ **Stop Loss e Take Profit automáticos** com validação de direção
-- ✅ **Monitoramento manual de SL/TP** como fallback
-- ✅ **Time Stop** para fechar posições após tempo determinado
-- ✅ **Confirmação de posição** antes de colocar SL/TP
-- ✅ **Retry com exponential backoff** para conexões instáveis
-- ✅ **Gerenciamento de risco** completo (perdas consecutivas, perda diária, etc.)
+---
 
-### Robustez
-- Suporte a **Testnet** e **Mainnet**
-- Múltiplos métodos para criar ordens SL/TP (fallback automático)
-- Logs detalhados para debug
-- Tratamento de erros em todos os pontos críticos
+## Funcionalidades
 
-## 📦 Requisitos
+### Menu Interativo
+O bot possui um menu interativo completo no terminal com as seguintes opções:
 
-- Python 3.8+
-- Conta Binance Futures (Testnet ou Mainnet)
-- API Key e Secret Key
+| Opção | Descrição |
+|-------|-----------|
+| **Modo Testnet** | Operação segura em ambiente simulado da Binance |
+| **Modo Conta Real** | Operação com dinheiro real (com confirmação de segurança) |
+| **Bot Automático** | Inicia o loop de trading automatizado |
+| **Saldo e Posições** | Consulta saldo e posições abertas |
+| **Análise de Mercado** | Executa análise técnica dos ativos selecionados |
+| **Backtesting** | Simula a estratégia com dados históricos |
+| **Configurações** | Exibe todas as configurações atuais |
+| **Telegram** | Testa conexão com notificações Telegram |
+| **Trocar Modo** | Alterna entre Testnet e Conta Real |
+| **Fechar Posições** | Fecha todas as posições abertas |
 
-## 🚀 Instalação
+### Estratégia de Trading
 
-### 1. Clonar/Baixar o projeto
+A estratégia utiliza múltiplos indicadores técnicos para decisões de entrada e saída:
+
+**Seleção de Ativos:**
+1. Identifica as 15 criptomoedas com maior volume nos futuros
+2. Aplica filtro de persistência (3 verificações consecutivas)
+3. Filtra correlação (Pearson < 0.85) para diversificação
+4. Seleciona até 5 ativos para o portfólio
+
+**Indicadores:**
+- EMA 9 e EMA 21 (tendência de curto prazo)
+- RSI 14 (momentum)
+- Bandas de Bollinger (20, 2) (suporte/resistência dinâmicos)
+- ATR 14 (volatilidade para position sizing)
+
+**Regras de Entrada:**
+- **LONG:** Preço > EMA9 > EMA21, RSI entre 50-70, preço abaixo da banda superior
+- **SHORT:** Preço < EMA9 < EMA21, RSI entre 30-50, preço acima da banda inferior
+
+### Gestão de Risco
+
+| Parâmetro | Valor Padrão | Descrição |
+|-----------|-------------|-----------|
+| Risco por Trade | 1% | Percentual do capital arriscado por operação |
+| Max Posições | 5 | Número máximo de posições simultâneas |
+| Perda Diária Máx | 3% | Bot para ao atingir este limite |
+| Drawdown Máximo | 10% | Todas as posições são fechadas |
+| Perdas Consecutivas | 3 | Pausa após N perdas seguidas |
+| Trailing Stop | +0.5% / 0.3% | Ativação e callback do trailing |
+| Time Stop | 30-90 min | Fechamento por tempo (aleatório) |
+
+### Segurança e Robustez
+
+- **Circuit Breaker:** Interrompe chamadas à API após falhas consecutivas
+- **Retry com Backoff:** Tentativas com intervalo exponencial
+- **Sanity Checks:** Validação de todos os dados da API
+- **Fechamento Robusto:** Múltiplos métodos de fallback para fechar posições
+- **Credenciais Seguras:** Variáveis de ambiente via `.env`
+
+### Notificações Telegram
+
+O bot envia notificações para:
+- Início e parada do bot
+- Abertura e fechamento de posições
+- Alertas de risco (drawdown, perda diária)
+- Seleção de ativos
+
+**Comandos remotos via Telegram:**
+- `/status` - Status do bot
+- `/posicoes` - Posições abertas
+- `/saldo` - Saldo atual
+- `/pausar` - Pausar o bot
+- `/retomar` - Retomar operações
+
+---
+
+## Instalação
+
+### Pré-requisitos
+- Python 3.10 ou superior
+- Conta na Binance com API habilitada para Futuros
+- (Opcional) Bot do Telegram para notificações
+
+### Passo a Passo
 
 ```bash
-cd /caminho/para/o/projeto
-```
+# 1. Clonar/copiar o projeto
+cd binance_bot
 
-### 2. Criar ambiente virtual (recomendado)
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-.\venv\Scripts\activate  # Windows
-```
-
-### 3. Instalar dependências
-
-```bash
+# 2. Instalar dependências
 pip install -r requirements.txt
-```
 
-### 4. Configurar credenciais
-
-```bash
+# 3. Configurar credenciais
 cp .env.example .env
-# Edite o arquivo .env com suas credenciais
+nano .env  # Editar com suas credenciais
+
+# 4. Executar o bot
+python main.py
 ```
 
-## ⚙️ Configuração
-
-### Arquivo `.env`
+### Configuração do `.env`
 
 ```env
-# Credenciais (obtenha em https://testnet.binancefuture.com para testnet)
-BINANCE_API_KEY=sua_api_key
-BINANCE_SECRET_KEY=sua_secret_key
+# Binance API (Conta Real)
+BINANCE_API_KEY=sua_api_key_real
+BINANCE_API_SECRET=sua_api_secret_real
 
-# Modo de operação
-BINANCE_TESTNET=true   # true = testnet, false = mainnet (dinheiro real!)
-DEBUG_MODE=false       # true = ignora filtros da estratégia
+# Binance API (Testnet)
+BINANCE_TESTNET_API_KEY=sua_api_key_testnet
+BINANCE_TESTNET_API_SECRET=sua_api_secret_testnet
 
-# Risco
-MAX_POSITION_SIZE_PERCENT=1.0  # 1% do capital por trade
-MAX_OPEN_POSITIONS=5           # Máximo 5 posições simultâneas
-MAX_DAILY_LOSS_PERCENT=3.0     # Para se perder 3% no dia
-MAX_CONSECUTIVE_LOSSES=3       # Para após 3 perdas seguidas
+# Telegram (opcional)
+TELEGRAM_BOT_TOKEN=seu_token
+TELEGRAM_CHAT_ID=seu_chat_id
 
-# TP/SL
-TP_PERCENT_LONG=1.05    # Take Profit de 1.05%
-SL_PERCENT_LONG=0.70    # Stop Loss de 0.70%
-TIME_STOP_MIN=12        # Time stop mínimo (minutos)
-TIME_STOP_MAX=22        # Time stop máximo (minutos)
+# Modo inicial
+USE_TESTNET=true
 ```
 
-### Obter API Keys
+### Obtendo Chaves da Testnet
 
-#### Testnet (Recomendado para testes)
-1. Acesse [https://testnet.binancefuture.com](https://testnet.binancefuture.com)
-2. Crie uma conta ou faça login
-3. Vá em **API Management**
-4. Crie uma nova API Key
-5. Copie a API Key e Secret Key para o `.env`
+1. Acesse [Binance Futures Testnet](https://testnet.binancefuture.com/)
+2. Faça login com sua conta GitHub
+3. Gere as chaves de API em "API Key"
+4. Copie API Key e Secret para o `.env`
 
-#### Mainnet (Dinheiro Real)
-1. Acesse [https://www.binance.com](https://www.binance.com)
-2. Vá em **API Management** nas configurações da conta
-3. Crie uma nova API Key
-4. **IMPORTANTE**: Habilite apenas permissões necessárias:
-   - ✅ Enable Reading
-   - ✅ Enable Futures
-   - ❌ NÃO habilite transferências!
-5. Configure IP whitelist se possível
+### Configurando o Telegram
 
-## 🎮 Uso
-
-### Iniciar o bot
-
-```bash
-python bot.py
-```
-
-### Parar o bot
-
-Pressione `Ctrl+C` para parar graciosamente.
-
-### Verificar logs
-
-```bash
-tail -f bot.log
-```
-
-## 📈 Estratégia
-
-### Randomized Trend Scalping
-
-1. **Detecção de Tendência**: Usa EMA200 do BTCUSDT como referência
-   - Preço > EMA200 + 0.2% → Tendência de ALTA
-   - Preço < EMA200 - 0.2% → Tendência de BAIXA
-   - Caso contrário → Mercado LATERAL (não opera)
-
-2. **Filtros de Entrada** (modo normal):
-   - **Alta**: Preço > EMA200, pullback na EMA20, candle de alta, volume acima da média, RSI 55-70
-   - **Baixa**: Preço < EMA200, pullback na EMA20, candle de baixa, volume acima da média, RSI 30-45
-
-3. **Seleção de Ativo**: Escolha aleatória ponderada por volume entre ativos elegíveis
-
-4. **Execução**:
-   - Ordem de entrada: MARKET
-   - Stop Loss: STOP_MARKET com `closePosition=true`
-   - Take Profit: TAKE_PROFIT_MARKET com `closePosition=true`
-
-### Fluxo de Abertura de Posição
-
-```
-1. Calcular tamanho da posição baseado no risco
-2. Executar ordem de entrada (MARKET)
-3. AGUARDAR confirmação da posição
-4. Obter preço real de preenchimento
-5. Recalcular SL/TP baseado no preço real
-6. Colocar Stop Loss (múltiplos métodos como fallback)
-7. Colocar Take Profit (múltiplos métodos como fallback)
-8. Se SL/TP falhar, monitorar manualmente
-```
-
-## 🛡️ Gerenciamento de Risco
-
-### Limites Configuráveis
-
-| Parâmetro | Descrição | Padrão |
-|-----------|-----------|--------|
-| `MAX_POSITION_SIZE_PERCENT` | % do capital por trade | 1.0% |
-| `MAX_OPEN_POSITIONS` | Posições simultâneas | 5 |
-| `MAX_DAILY_LOSS_PERCENT` | Perda diária máxima | 3.0% |
-| `MAX_CONSECUTIVE_LOSSES` | Perdas consecutivas | 3 |
-
-### Proteções Automáticas
-
-- **Validação de SL/TP**: Verifica direção correta antes de enviar
-  - LONG: SL < Preço Atual < TP
-  - SHORT: TP < Preço Atual < SL
-- **Monitoramento Manual**: Se ordens automáticas falharem, o bot monitora e fecha no preço correto
-- **Time Stop**: Fecha posição após tempo determinado independente de lucro/prejuízo
-
-## 🔧 Troubleshooting
-
-### Erro: "Order would trigger immediately" (-2021)
-
-**Causa**: O `stopPrice` está do lado errado do preço atual.
-
-**Solução**: O bot já valida a direção automaticamente. Se persistir:
-1. Verifique se o preço se moveu muito rápido
-2. Aumente o % de SL/TP nas configurações
-
-### Erro: "Order type not supported" (-4120)
-
-**Causa**: O testnet da Binance tem limitações em alguns tipos de ordem.
-
-**Solução**: O bot tenta múltiplos métodos automaticamente:
-1. STOP_MARKET com closePosition
-2. STOP_MARKET com reduceOnly
-3. STOP com price
-4. Monitoramento manual (fallback)
-
-### Erro: "Connection timed out" / "Name resolution failed"
-
-**Causa**: Problemas de conectividade de rede.
-
-**Solução**: 
-- O bot tem retry automático com backoff exponencial
-- Verifique sua conexão de internet
-- Aumente `API_TIMEOUT` e `MAX_RETRIES` no `.env`
-
-### Erro: "Invalid API key"
-
-**Causa**: Credenciais incorretas ou testnet vs mainnet misturados.
-
-**Solução**:
-1. Verifique se `BINANCE_TESTNET` está correto
-2. Use API Key do testnet para testnet
-3. Use API Key da mainnet para mainnet
-
-### SL/TP não está sendo executado
-
-**Possíveis causas**:
-1. **Ordens automáticas falharam**: Verifique os logs para "MANUAL"
-2. **Bot foi parado**: Se parar o bot, ordens manuais não são executadas
-3. **Slippage**: Em movimentos rápidos, o preço pode pular o SL/TP
-
-**Solução**: 
-- Mantenha o bot rodando
-- Use o modo DEBUG_MODE=false para ver logs detalhados
-
-## ❓ FAQ
-
-### O bot funciona na mainnet?
-
-Sim! Altere `BINANCE_TESTNET=false` no `.env`. **CUIDADO: Você estará usando dinheiro real!**
-
-### Posso usar em outras corretoras?
-
-Não, o bot foi desenvolvido especificamente para a Binance Futures.
-
-### Quanto posso ganhar?
-
-Não há garantias. Trading é arriscado e você pode perder todo o capital investido.
-
-### O bot precisa ficar rodando 24/7?
-
-Sim, para monitorar posições. Se o SL/TP automático estiver ativo, suas posições estão protegidas mesmo se o bot parar. Mas o Time Stop e monitoramento manual precisam do bot rodando.
-
-### Posso rodar múltiplas instâncias?
-
-Não recomendado, pois podem interferir nas ordens uma da outra.
+1. Fale com [@BotFather](https://t.me/BotFather) no Telegram
+2. Crie um bot com `/newbot`
+3. Copie o token gerado
+4. Fale com [@userinfobot](https://t.me/userinfobot) para obter seu Chat ID
+5. Configure no `.env`
 
 ---
 
-## ⚠️ Aviso Legal
+## Arquitetura
 
-Este software é fornecido "como está", sem garantias. Trading de criptomoedas é altamente arriscado. Você pode perder todo o capital investido. Use por sua conta e risco.
+```
+binance_bot/
+├── main.py                 # Menu interativo e ponto de entrada
+├── config.py               # Configurações e variáveis de ambiente
+├── binance_client.py       # Wrapper da API com circuit breaker
+├── strategy_engine.py      # Núcleo da estratégia de trading
+├── risk_manager.py         # Gestão de risco e position sizing
+├── position_manager.py     # Gerenciamento de posições e trailing stop
+├── indicators.py           # Indicadores técnicos (EMA, RSI, BB, ATR)
+├── correlation_filter.py   # Filtro de correlação entre ativos
+├── telegram_notifier.py    # Notificações e comandos Telegram
+├── backtest_engine.py      # Motor de backtesting
+├── requirements.txt        # Dependências
+├── .env.example            # Template de configuração
+├── .gitignore              # Arquivos ignorados pelo Git
+├── utils/
+│   ├── logger.py           # Sistema de logging
+│   └── helpers.py          # Funções auxiliares
+├── tests/
+│   ├── test_indicators.py  # Testes de indicadores
+│   └── test_risk_manager.py # Testes de gestão de risco
+├── logs/                   # Logs de execução
+└── backtest_data/          # Cache de dados históricos
+```
 
 ---
 
-## 📝 Licença
+## Fluxo de Operação
 
-MIT License - Use livremente, mas sem garantias.
+1. **Inicialização:** Carrega configurações, conecta à Binance, fecha posições prévias
+2. **Seleção de Ativos:** Identifica top moedas por volume, aplica filtros
+3. **Análise:** Calcula indicadores para cada ativo selecionado
+4. **Entrada:** Abre posições quando sinais são detectados (respeitando limites)
+5. **Monitoramento:** Atualiza preços, verifica SL/TP/trailing/time stop
+6. **Dashboard:** Exibe informações em tempo real no terminal
+7. **Notificações:** Envia alertas via Telegram
+8. **Parada:** Ctrl+C fecha posições ordenadamente
+
+---
+
+## Testes
+
+```bash
+# Executar todos os testes
+cd binance_bot
+python -m pytest tests/ -v
+
+# Executar teste específico
+python -m pytest tests/test_indicators.py -v
+python -m pytest tests/test_risk_manager.py -v
+```
+
+---
+
+## Recomendações de Segurança
+
+1. **Nunca** compartilhe suas chaves de API
+2. Configure permissões mínimas na API (apenas Futuros, sem Saques)
+3. **Sempre** teste na Testnet antes de usar dinheiro real
+4. Monitore o bot regularmente
+5. Defina limites de risco conservadores
+6. Mantenha o arquivo `.env` fora do controle de versão
+
+---
+
+## Licença
+
+Este projeto é fornecido "como está", sem garantias de qualquer tipo. Use por sua conta e risco.
